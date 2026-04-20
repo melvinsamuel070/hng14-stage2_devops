@@ -1,0 +1,33 @@
+# Environment variables
+.env
+.env.*
+
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+.pytest_cache/
+.coverage
+coverage.xml
+
+# Node.js
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Docker
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE / Editor
+.vscode/
+.idea/
+
+# Git
+*.swp
