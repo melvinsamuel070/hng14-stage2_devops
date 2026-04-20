@@ -24,4 +24,4 @@ def test_get_job_invalid():
     assert response.status_code == 200
     assert "error" in response.json()
 
-    
+
