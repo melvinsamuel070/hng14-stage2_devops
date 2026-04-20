@@ -1,0 +1,177 @@
+name: Stage 2 CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+
+jobs:
+  lint:
+    name: Lint Codebase
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Python lint
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python lint tools
+        run: |
+          pip install flake8
+
+      - name: Run Python lint (API)
+        run: flake8 api || true
+
+      # JavaScript lint
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+
+      - name: Install JS dependencies
+        run: |
+          cd frontend
+          npm install
+
+      - name: Run ESLint (if available)
+        run: |
+          cd frontend
+          npx eslint . || true
+
+      # Docker lint
+      - name: Install Hadolint
+        run: |
+          wget -O hadolint https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Linux-x86_64
+          chmod +x hadolint
+          sudo mv hadolint /usr/local/bin/
+
+      - name: Lint Dockerfiles
+        run: |
+          hadolint api/Dockerfile || true
+          hadolint worker/Dockerfile || true
+          hadolint frontend/Dockerfile || true
+
+
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          cd api
+          pip install -r requirements.txt
+          pip install pytest pytest-cov
+
+      - name: Run tests with coverage
+        run: |
+          cd api
+          pytest --cov=. --cov-report=xml
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: api/coverage.xml
+
+
+  build:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build API image
+        run: docker build -t api:${{ github.sha }} api
+
+      - name: Build Worker image
+        run: docker build -t worker:${{ github.sha }} worker
+
+      - name: Build Frontend image
+        run: docker build -t frontend:${{ github.sha }} frontend
+
+
+  security:
+    name: Security Scan (Trivy)
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Trivy
+        run: |
+          sudo apt-get install -y wget
+          wget https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.50.1_Linux-64bit.deb
+          sudo dpkg -i trivy_0.50.1_Linux-64bit.deb
+
+      - name: Scan API image
+        run: trivy image api:${{ github.sha }} --severity CRITICAL --exit-code 1
+
+      - name: Scan Worker image
+        run: trivy image worker:${{ github.sha }} --severity CRITICAL --exit-code 1
+
+      - name: Scan Frontend image
+        run: trivy image frontend:${{ github.sha }} --severity CRITICAL --exit-code 1
+
+
+  integration:
+    name: Integration Test (Full Stack)
+    runs-on: ubuntu-latest
+    needs: security
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start system
+        run: docker compose up -d --build
+
+      - name: Wait for API
+        run: sleep 20
+
+      - name: Test job creation
+        run: |
+          curl -X POST http://localhost:8000/jobs
+
+      - name: Cleanup
+        if: always()
+        run: docker compose down
+
+
+  deploy:
+    name: Deploy (Rolling Update Simulation)
+    runs-on: ubuntu-latest
+    needs: integration
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build new images
+        run: docker compose build
+
+      - name: Start new version
+        run: docker compose up -d
+
+      - name: Wait for health check
+        run: sleep 30
+
+      - name: Verify API health
+        run: curl --fail http://localhost:8000/health
+
+      - name: Finish deployment
+        run: echo "Deployment successful"
