@@ -30,7 +30,7 @@ jobs:
         run: pip install flake8
 
       - name: Run Python lint (API)
-        run: flake8 api
+        run: flake8 api --config=.flake8
 
       # ---------------- JS Lint ----------------
       - name: Setup Node
