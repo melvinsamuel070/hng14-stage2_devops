@@ -2,16 +2,6 @@
 .env
 .env.*
 
-# Python
-venv/
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-*.sqlite3
-.pytest_cache/
-.coverage
-coverage.xml
 
 # Node.js
 node_modules/
