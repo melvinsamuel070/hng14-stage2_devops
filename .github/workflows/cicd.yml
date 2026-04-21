@@ -359,6 +359,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y trivy
 
+         
+      - name: Pull images from registry
+        run: |
+          docker pull localhost:5000/api:${{ github.sha }}
+          docker pull localhost:5000/worker:${{ github.sha }}
+          docker pull localhost:5000/frontend:${{ github.sha }}
+
+
       - name: Scan images
         run: |
           trivy image --severity CRITICAL --exit-code 1 localhost:5000/api:${{ github.sha }} --format sarif -o api.sarif
