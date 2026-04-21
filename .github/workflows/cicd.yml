@@ -239,52 +239,31 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # ---------------- Python Lint ----------------
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      # Python
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip
+      - run: pip install flake8
+      - run: flake8 api --exclude venv,__pycache__
 
-      - name: Install Python lint tools
-        run: pip install flake8
-
-      - name: Run Python lint (API)
-        run: flake8 api --exclude venv,__pycache__
-
-      # ---------------- JS Lint ----------------
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      # Node
+      - uses: actions/setup-node@v4
         with:
           node-version: "18"
 
-      - name: Install JS dependencies
-        run: |
+      - run: |
           cd frontend
           npm install --legacy-peer-deps
+          npx eslint .
 
-      - name: Run ESLint
-        run: |
-          cd frontend
-          npx eslint . 
-
-      # ---------------- Docker Lint ----------------
-      - name: Install Hadolint
-        run: |
+      # Docker lint
+      - run: |
           wget -O hadolint https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Linux-x86_64
           chmod +x hadolint
           sudo mv hadolint /usr/local/bin/
-
-      - name: Lint Dockerfiles
-        run: |
           hadolint api/Dockerfile
           hadolint worker/Dockerfile
           hadolint frontend/Dockerfile
@@ -294,69 +273,79 @@ jobs:
     name: Run Tests
     runs-on: ubuntu-latest
     needs: lint
-    
+
     services:
       redis:
         image: redis:7-alpine
         ports:
           - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Install dependencies
-        run: |
+      - run: |
           cd api
           pip install -r requirements.txt
           pip install pytest pytest-cov
 
-      - name: Run tests with coverage
-        env:
-          REDIS_HOST: localhost
-          REDIS_PORT: 6379
-        run: |
+      - run: |
           cd api
           python -m pytest --cov=. --cov-report=xml
 
-      - name: Upload coverage report
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: coverage-report
+          name: coverage
           path: api/coverage.xml
 
 
   build:
-    name: Build Docker Images
+    name: Build & Push Images
     runs-on: ubuntu-latest
     needs: test
+
+    services:
+      registry:
+        image: registry:2
+        ports:
+          - 5000:5000
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build API image
-        run: docker build -t api:${{ github.sha }} api
+      - name: Build images
+        run: |
+          docker build -t localhost:5000/api:${{ github.sha }} api
+          docker build -t localhost:5000/worker:${{ github.sha }} worker
+          docker build -t localhost:5000/frontend:${{ github.sha }} frontend
 
-      - name: Build Worker image
-        run: docker build -t worker:${{ github.sha }} worker
+          docker tag localhost:5000/api:${{ github.sha }} localhost:5000/api:latest
+          docker tag localhost:5000/worker:${{ github.sha }} localhost:5000/worker:latest
+          docker tag localhost:5000/frontend:${{ github.sha }} localhost:5000/frontend:latest
 
-      - name: Build Frontend image
-        run: docker build -t frontend:${{ github.sha }} frontend
+      - name: Push images
+        run: |
+          docker push localhost:5000/api:${{ github.sha }}
+          docker push localhost:5000/api:latest
+          docker push localhost:5000/worker:${{ github.sha }}
+          docker push localhost:5000/worker:latest
+          docker push localhost:5000/frontend:${{ github.sha }}
+          docker push localhost:5000/frontend:latest
 
 
   security:
-    name: Security Scan (Trivy)
+    name: Security Scan
     runs-on: ubuntu-latest
     needs: build
+
+    services:
+      registry:
+        image: registry:2
+        ports:
+          - 5000:5000
 
     steps:
       - uses: actions/checkout@v4
@@ -364,51 +353,59 @@ jobs:
       - name: Install Trivy
         run: |
           sudo apt-get update
-          sudo apt-get install -y wget
-          VERSION="0.56.1"
-          wget https://github.com/aquasecurity/trivy/releases/download/v${VERSION}/trivy_${VERSION}_Linux-64bit.deb
-          sudo dpkg -i trivy_${VERSION}_Linux-64bit.deb
+          sudo apt-get install -y wget apt-transport-https gnupg lsb-release
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+          echo deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main | sudo tee /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update
+          sudo apt-get install -y trivy
 
-      - name: Scan API image
-        run: trivy image --severity CRITICAL --exit-code 1 api:${{ github.sha }}
+      - name: Scan images
+        run: |
+          trivy image --severity CRITICAL --exit-code 1 localhost:5000/api:${{ github.sha }} --format sarif -o api.sarif
+          trivy image --severity CRITICAL --exit-code 1 localhost:5000/worker:${{ github.sha }} --format sarif -o worker.sarif
+          trivy image --severity CRITICAL --exit-code 1 localhost:5000/frontend:${{ github.sha }} --format sarif -o frontend.sarif
 
-      - name: Scan Worker image
-        run: trivy image --severity CRITICAL --exit-code 1 worker:${{ github.sha }}
-
-      - name: Scan Frontend image
-        run: trivy image --severity CRITICAL --exit-code 1 frontend:${{ github.sha }}
+      - uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: .
 
 
   integration:
-    name: Integration Test (Full Stack)
+    name: Integration Test
     runs-on: ubuntu-latest
     needs: security
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Start system
-        run: docker compose up -d --build
+      - run: docker compose up -d --build
 
-      - name: Wait for services
+      - name: Wait for API
         run: sleep 25
 
-      - name: Test job creation
+      - name: Full job flow test
         run: |
-          RESPONSE=$(curl -s -X POST http://localhost:8000/jobs)
-          echo "$RESPONSE"
-          echo "$RESPONSE" | grep job_id
+          JOB=$(curl -s -X POST http://localhost:8000/jobs | jq -r .job_id)
+          echo "Job ID: $JOB"
 
-      - name: Verify API health
-        run: curl --fail http://localhost:8000/health
+          for i in {1..10}; do
+            STATUS=$(curl -s http://localhost:8000/jobs/$JOB | jq -r .status)
+            echo "Status: $STATUS"
+            if [ "$STATUS" = "done" ]; then
+              exit 0
+            fi
+            sleep 3
+          done
 
-      - name: Cleanup
-        if: always()
+          echo "Job did not complete"
+          exit 1
+
+      - if: always()
         run: docker compose down
 
 
   deploy:
-    name: Deploy (Rolling Update Simulation)
+    name: Deploy (Rolling Update)
     runs-on: ubuntu-latest
     needs: integration
     if: github.ref == 'refs/heads/main'
@@ -416,17 +413,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build latest images
-        run: docker compose build
-
-      - name: Start services
+      - name: Start old version
         run: docker compose up -d
 
-      - name: Wait for health check
-        run: sleep 20
+      - name: Build new version
+        run: docker compose build
 
-      - name: Validate API
-        run: curl --fail http://localhost:8000/health
+      - name: Start new container
+        run: docker compose up -d --no-deps api
 
-      - name: Deployment success
-        run: echo "Deployment successful"
+      - name: Wait for health (max 60s)
+        run: |
+          for i in {1..12}; do
+            if curl --fail http://localhost:8000/health; then
+              echo "New version healthy"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Health check failed"
+          exit 1
+
+      - name: Deployment complete
+        run: echo "Rolling update successful"
