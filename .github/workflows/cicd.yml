@@ -226,7 +226,6 @@
 
 
 
-
 name: Stage 2 CI/CD Pipeline
 
 on:
@@ -366,8 +365,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y wget
-          wget https://github.com/aquasecurity/trivy/releases/latest/download/trivy_Linux-64bit.deb
-          sudo dpkg -i trivy_Linux-64bit.deb
+          VERSION="0.56.1"
+          wget https://github.com/aquasecurity/trivy/releases/download/v${VERSION}/trivy_${VERSION}_Linux-64bit.deb
+          sudo dpkg -i trivy_${VERSION}_Linux-64bit.deb
 
       - name: Scan API image
         run: trivy image --severity CRITICAL --exit-code 1 api:${{ github.sha }}
