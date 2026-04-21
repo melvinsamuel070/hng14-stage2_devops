@@ -1,10 +1,9 @@
-# Stage 1
 FROM python:3.12-slim AS builder
 
 WORKDIR /app
 
 COPY requirements.txt .
-RUN pip install --user -r requirements.txt
+RUN pip install --no-cache-dir --user -r requirements.txt
 
 
 # Stage 2
@@ -12,7 +11,7 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends curl=7.88.1-2 && rm -rf /var/lib/apt/lists/*
 
 RUN useradd -m appuser
 
