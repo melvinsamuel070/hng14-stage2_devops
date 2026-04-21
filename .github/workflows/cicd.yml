@@ -1,3 +1,232 @@
+# name: Stage 2 CI/CD Pipeline
+
+# on:
+#   push:
+#     branches: ["master"]
+#   pull_request:
+
+# jobs:
+#   lint:
+#     name: Lint Codebase
+#     runs-on: ubuntu-latest
+
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v4
+
+#       # ---------------- Python Lint ----------------
+#       - name: Set up Python
+#         uses: actions/setup-python@v5
+#         with:
+#           python-version: "3.12"
+
+#       - name: Cache pip
+#         uses: actions/cache@v4
+#         with:
+#           path: ~/.cache/pip
+#           key: ${{ runner.os }}-pip
+
+#       - name: Install Python lint tools
+#         run: pip install flake8
+
+#       - name: Run Python lint (API)
+#         run: flake8 api --exclude venv,__pycache__
+
+#       # ---------------- JS Lint ----------------
+#       - name: Setup Node
+#         uses: actions/setup-node@v4
+#         with:
+#           node-version: "18"
+
+#       - name: Install JS dependencies
+#         run: |
+#           cd frontend
+#           npm install --legacy-peer-deps
+
+#       - name: Run ESLint
+#         run: |
+#           cd frontend
+#           npx eslint . 
+
+#       # ---------------- Docker Lint ----------------
+#       - name: Install Hadolint
+#         run: |
+#           wget -O hadolint https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Linux-x86_64
+#           chmod +x hadolint
+#           sudo mv hadolint /usr/local/bin/
+
+#       - name: Lint Dockerfiles
+#         run: |
+#           hadolint api/Dockerfile
+#           hadolint worker/Dockerfile
+#           hadolint frontend/Dockerfile
+
+
+#   test:
+#     name: Run Tests
+#     runs-on: ubuntu-latest
+#     needs: lint
+    
+#     services:
+#       redis:
+#         image: redis:7-alpine
+#         ports:
+#           - 6379:6379
+#         options: >-
+#           --health-cmd "redis-cli ping"
+#           --health-interval 10s
+#           --health-timeout 5s
+#           --health-retries 5
+
+#     steps:
+#       - uses: actions/checkout@v4
+
+#       - name: Set up Python
+#         uses: actions/setup-python@v5
+#         with:
+#           python-version: "3.12"
+
+#       - name: Install dependencies
+#         run: |
+#           cd api
+#           pip install -r requirements.txt
+#           pip install pytest pytest-cov
+
+#       - name: Run tests with coverage
+#         env:
+#           REDIS_HOST: localhost
+#           REDIS_PORT: 6379
+#         run: |
+#           cd api
+#           python -m pytest --cov=. --cov-report=xml
+
+#       - name: Upload coverage report
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: coverage-report
+#           path: api/coverage.xml
+
+
+#   build:
+#     name: Build Docker Images
+#     runs-on: ubuntu-latest
+#     needs: test
+
+#     steps:
+#       - uses: actions/checkout@v4
+
+#       - name: Build API image
+#         run: docker build -t api:${{ github.sha }} api
+
+#       - name: Build Worker image
+#         run: docker build -t worker:${{ github.sha }} worker
+
+#       - name: Build Frontend image
+#         run: docker build -t frontend:${{ github.sha }} frontend
+
+
+#   security:
+#     name: Security Scan (Trivy)
+#     runs-on: ubuntu-latest
+#     needs: build
+
+#     steps:
+#       - uses: actions/checkout@v4
+
+#       - name: Install Trivy
+#         run: |
+#           sudo apt-get update
+#           sudo apt-get install -y wget
+#           wget https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.50.1_Linux-64bit.deb
+#           sudo dpkg -i trivy_0.50.1_Linux-64bit.deb
+
+#       - name: Scan API image
+#         run: trivy image --severity CRITICAL --exit-code 1 api:${{ github.sha }}
+
+#       - name: Scan Worker image
+#         run: trivy image --severity CRITICAL --exit-code 1 worker:${{ github.sha }}
+
+#       - name: Scan Frontend image
+#         run: trivy image --severity CRITICAL --exit-code 1 frontend:${{ github.sha }}
+
+
+#   integration:
+#     name: Integration Test (Full Stack)
+#     runs-on: ubuntu-latest
+#     needs: security
+
+#     steps:
+#       - uses: actions/checkout@v4
+
+#       - name: Start system
+#         run: docker compose up -d --build
+
+#       - name: Wait for services
+#         run: sleep 25
+
+#       - name: Test job creation
+#         run: |
+#           RESPONSE=$(curl -s -X POST http://localhost:8000/jobs)
+#           echo "$RESPONSE"
+#           echo "$RESPONSE" | grep job_id
+
+#       - name: Verify API health
+#         run: curl --fail http://localhost:8000/health
+
+#       - name: Cleanup
+#         if: always()
+#         run: docker compose down
+
+
+#   deploy:
+#     name: Deploy (Rolling Update Simulation)
+#     runs-on: ubuntu-latest
+#     needs: integration
+#     if: github.ref == 'refs/heads/main'
+
+#     steps:
+#       - uses: actions/checkout@v4
+
+#       - name: Build latest images
+#         run: docker compose build
+
+#       - name: Start services
+#         run: docker compose up -d
+
+#       - name: Wait for health check
+#         run: sleep 20
+
+#       - name: Validate API
+#         run: curl --fail http://localhost:8000/health
+
+#       - name: Deployment success
+#         run: echo "Deployment successful"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 name: Stage 2 CI/CD Pipeline
 
 on:
@@ -137,8 +366,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y wget
-          wget https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.50.1_Linux-64bit.deb
-          sudo dpkg -i trivy_0.50.1_Linux-64bit.deb
+          wget https://github.com/aquasecurity/trivy/releases/latest/download/trivy_Linux-64bit.deb
+          sudo dpkg -i trivy_Linux-64bit.deb
 
       - name: Scan API image
         run: trivy image --severity CRITICAL --exit-code 1 api:${{ github.sha }}
