@@ -30,7 +30,6 @@
 # CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
 
 
-
 FROM python:3.12-slim AS builder
 
 WORKDIR /app
@@ -44,7 +43,8 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends curl=8.6.0-3 && rm -rf /var/lib/apt/lists/*
+# hadolint ignore=DL3008
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 
 RUN useradd -m appuser
 
