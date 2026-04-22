@@ -2,20 +2,65 @@ import redis
 import time
 import os
 import signal
+import sys
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379")
 r = redis.Redis.from_url(REDIS_URL, decode_responses=True)
 
-def process_job(job_id):
-    print(f"Processing job {job_id}")
-    time.sleep(2)
-    r.hset(f"job:{job_id}", "status", "done")
-    print(f"Done: {job_id}")
+running = True
 
+
+# -------------------------
+# GRACEFUL SHUTDOWN
+# -------------------------
+def shutdown(signum, frame):
+    global running
+    print("Shutting down worker...")
+    running = False
+
+
+signal.signal(signal.SIGINT, shutdown)
+signal.signal(signal.SIGTERM, shutdown)
+
+
+# -------------------------
+# PROCESS JOB
+# -------------------------
+def process_job(job_id):
+    try:
+        print(f"Processing job {job_id}")
+
+        time.sleep(2)  # simulate work
+
+        r.hset(f"job:{job_id}", "status", "done")
+
+        print(f"Completed job {job_id}")
+
+    except Exception as e:
+        print(f"Error processing job {job_id}: {e}")
+        r.hset(f"job:{job_id}", "status", "failed")
+
+
+# -------------------------
+# WORKER LOOP
+# -------------------------
 print("Worker started...")
 
-while True:
-    job = r.brpop("jobs", timeout=5)
-    if job:
-        _, job_id = job
-        process_job(job_id)
+while running:
+    try:
+        job = r.brpop("jobs", timeout=5)
+
+        if job:
+            _, job_id = job
+            process_job(job_id)
+
+    except redis.exceptions.ConnectionError:
+        print("Redis connection error. Retrying...")
+        time.sleep(2)
+
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+        time.sleep(2)
+
+print("Worker stopped cleanly.")
+sys.exit(0)
