@@ -1,5 +1,5 @@
 from fastapi.testclient import TestClient
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from main import app
 
 client = TestClient(app)
@@ -16,8 +16,7 @@ def test_create_job(mock_redis):
     assert "job_id" in response.json()
 
 
-@patch("main.r")
-def test_health(mock_redis):
+def test_health():
     response = client.get("/health")
 
     assert response.status_code == 200
