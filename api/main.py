@@ -1,35 +1,34 @@
-from fastapi.testclient import TestClient
-from unittest.mock import patch
-from main import app
+from fastapi import FastAPI
+import redis
+import uuid
+import os
 
-client = TestClient(app)
+app = FastAPI()
 
-
-@patch("main.r")
-def test_create_job(mock_redis):
-    mock_redis.lpush.return_value = 1
-    mock_redis.hset.return_value = True
-
-    response = client.post("/jobs")
-
-    assert response.status_code == 200
-    assert "job_id" in response.json()
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+r = redis.Redis.from_url(REDIS_URL, decode_responses=True)
 
 
-def test_health():
-    response = client.get("/health")
-
-    assert response.status_code == 200
-    assert response.json()["status"] == "ok"
+@app.get("/health")
+def health():
+    return {"status": "ok"}
 
 
-@patch("main.r")
-def test_get_job_invalid(mock_redis):
-    mock_redis.hget.return_value = None
+@app.post("/jobs")
+def create_job():
+    job_id = str(uuid.uuid4())
 
-    response = client.get("/jobs/invalid-id")
+    r.lpush("jobs", job_id)
+    r.hset(f"job:{job_id}", mapping={"status": "queued"})
 
-    assert response.status_code == 200
-    assert "error" in response.json()
-    
+    return {"job_id": job_id}
 
+
+@app.get("/jobs/{job_id}")
+def get_job(job_id: str):
+    status = r.hget(f"job:{job_id}", "status")
+
+    if not status:
+        return {"error": "not found"}
+
+    return {"job_id": job_id, "status": status}

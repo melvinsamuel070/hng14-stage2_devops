@@ -1,39 +1,25 @@
 from fastapi.testclient import TestClient
-from unittest.mock import patch, MagicMock
 from main import app
 
 client = TestClient(app)
 
 
-# -------------------------
-# MOCK REDIS SETUP
-# -------------------------
-@patch("main.redis")
-def test_create_job(mock_redis):
-    mock_redis.rpush = MagicMock(return_value=1)
-
+# 1. Test job creation
+def test_create_job():
     response = client.post("/jobs")
-
     assert response.status_code == 200
     assert "job_id" in response.json()
 
 
-@patch("main.redis")
-def test_health(mock_redis):
-    mock_redis.ping = MagicMock(return_value=True)
-
+# 2. Test health endpoint
+def test_health():
     response = client.get("/health")
-
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
 
 
-@patch("main.redis")
-def test_get_job_invalid(mock_redis):
-    mock_redis.get.return_value = None
-
+# 3. Test get job (invalid id)
+def test_get_job_invalid():
     response = client.get("/jobs/invalid-id")
-
     assert response.status_code == 200
     assert "error" in response.json()
-    
