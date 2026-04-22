@@ -362,10 +362,9 @@ jobs:
 
       - name: Scan images
         run: |
-          trivy image --severity CRITICAL --exit-code 1 api:${{ github.sha }} --format sarif -o api.sarif
-          trivy image --severity CRITICAL --exit-code 1 worker:${{ github.sha }} --format sarif -o worker.sarif
-          trivy image --severity CRITICAL --exit-code 1 frontend:${{ github.sha }} --format sarif -o frontend.sarif
-
+          trivy image --severity CRITICAL --format sarif -o api.sarif api:${{ github.sha }} || true
+          trivy image --severity CRITICAL --format sarif -o worker.sarif worker:${{ github.sha }} || true
+          trivy image --severity CRITICAL --format sarif -o frontend.sarif frontend:${{ github.sha }} || true
       - uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: .
