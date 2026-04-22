@@ -1,27 +1,22 @@
 
----
-
-# 📄 FIXES.md (FINAL VERSION)
-
-```markdown
 # FIXES DOCUMENTATION - STAGE 2 DEVOPS
 
-This document outlines all issues found in the provided application and how they were resolved.
+This document outlines all issues identified in the application and the fixes applied to ensure full containerized CI/CD functionality.
 
 ---
 
 ## 1. Hardcoded Redis Connection in API
 
 **File:** api/main.py  
-**Issue:** Redis connection was hardcoded to `localhost`, which fails inside Docker containers.  
-**Fix:** Replaced with environment variable `REDIS_URL` using `os.getenv()`.
+**Issue:** Redis was hardcoded to `localhost`, which fails inside Docker containers.  
+**Fix:** Replaced with environment variable `REDIS_URL` using `os.getenv()` to support Docker networking.
 
 ---
 
 ## 2. Missing Health Check Endpoint
 
 **File:** api/main.py  
-**Issue:** No `/health` endpoint existed, causing Docker HEALTHCHECK to fail.  
+**Issue:** `/health` endpoint was missing, causing Docker health checks and CI integration tests to fail.  
 **Fix:** Added `/health` endpoint returning `{ "status": "ok" }`.
 
 ---
@@ -29,84 +24,98 @@ This document outlines all issues found in the provided application and how they
 ## 3. Worker Redis Connection Failure
 
 **File:** worker/worker.py  
-**Issue:** Worker attempted to connect to Redis via `localhost`, failing in containerized environment.  
-**Fix:** Updated worker to use `REDIS_URL` environment variable.
+**Issue:** Worker was connecting to Redis via `localhost`, which does not work in containerized environments.  
+**Fix:** Updated worker to use `REDIS_URL` environment variable pointing to Docker service name `redis`.
 
 ---
 
-## 4. Frontend API URL Misconfiguration
+## 4. Incorrect Queue Name Between API and Worker
+
+**Issue:** API and worker used different Redis queue names (`job` vs `jobs`).  
+**Fix:** Standardized queue name to `jobs` across both services.
+
+---
+
+## 5. Job Status Inconsistency
+
+**Issue:** Worker set job status to `completed` while integration tests expected `done`.  
+**Fix:** Standardized job status to `done` across worker and API responses.
+
+---
+
+## 6. Frontend API URL Misconfiguration
 
 **File:** frontend/app.js  
-**Issue:** API URL was hardcoded to `localhost`, which does not work in Docker Compose networking.  
-**Fix:** Replaced with environment variable `API_URL`.
+**Issue:** API URL was hardcoded to `localhost`, breaking communication in Docker Compose.  
+**Fix:** Replaced with `API_URL` environment variable.
 
 ---
 
-## 5. Frontend Undefined Job ID
+## 7. Frontend Undefined Job ID
 
 **File:** frontend/app.js  
-**Issue:** UI displayed "Submitted: undefined" due to incorrect response handling.  
-**Fix:** Updated logic to correctly read `job_id` from API response.
+**Issue:** UI displayed `Submitted: undefined` due to incorrect response parsing.  
+**Fix:** Corrected response handling to properly extract `job_id` from API response.
 
 ---
 
-## 6. Docker Networking Issues
+## 8. Docker Networking Issues
 
 **Issue:** Services could not communicate due to use of `localhost`.  
-**Fix:** Introduced Docker Compose networking and used service names (`api`, `redis`) as hosts.
+**Fix:** Implemented Docker Compose networking and replaced `localhost` with service names (`api`, `redis`, `worker`).
 
 ---
 
-## 7. Missing Non-Root Users in Containers
-
-**Files:** All Dockerfiles  
-**Issue:** Containers were running as root user, which is a security risk.  
-**Fix:** Created and used a non-root user (`appuser`) in all containers.
-
----
-
-## 8. Missing Health Checks in Containers
+## 9. Missing Non-Root Users in Containers
 
 **Files:** Dockerfiles  
-**Issue:** No health checks defined for services.  
-**Fix:** Added HEALTHCHECK instructions to ensure service availability.
+**Issue:** Containers ran as root user, posing a security risk.  
+**Fix:** Added non-root user (`appuser`) in all Dockerfiles for secure execution.
 
 ---
 
-## 9. Missing Unit Tests
+## 10. Missing Container Health Checks
 
-**Issue:** No test coverage for API endpoints.  
-**Fix:** Added pytest tests for:
+**Files:** Dockerfiles / docker-compose.yml  
+**Issue:** No health checks defined for services.  
+**Fix:** Added HEALTHCHECK instructions and Docker Compose health conditions.
+
+---
+
+## 11. Missing Unit Tests
+
+**Issue:** No automated API tests were originally included.  
+**Fix:** Added pytest tests covering:
 - Job creation
 - Job retrieval
-- Health endpoint
+- Health endpoint validation
 
 ---
 
-## 10. Pytest Environment Misconfiguration
+## 12. Pytest Environment Misconfiguration
 
-**Issue:** Tests initially failed due to system pytest being used instead of virtual environment.  
-**Fix:** Installed pytest inside venv and used `python -m pytest`.
-
----
-
-## 11. Missing CI/CD Pipeline
-
-**Issue:** No automation for linting, testing, or deployment.  
-**Fix:** Implemented GitHub Actions pipeline with stages:
-- lint
-- test
-- build
-- security scan
-- integration test
-- deploy
+**Issue:** System pytest was used instead of virtual environment, causing missing module errors.  
+**Fix:** Installed dependencies inside virtual environment and ran tests using `python -m pytest`.
 
 ---
 
-## 12. Redis Exposure Risk
+## 13. CI/CD Pipeline Not Implemented Initially
 
-**Issue:** Redis was initially exposed to host machine.  
-**Fix:** Restricted Redis to internal Docker network only.
+**Issue:** No automation for linting, testing, building, or deployment.  
+**Fix:** Implemented GitHub Actions CI/CD pipeline with stages:
+- Linting (Python, JS, Docker)
+- Unit Testing
+- Docker Image Build
+- Security Scan (Trivy)
+- Integration Testing
+- Deployment Simulation
+
+---
+
+## 14. Redis Exposure Risk
+
+**Issue:** Redis was initially exposed outside Docker network.  
+**Fix:** Restricted Redis to internal Docker Compose network only.
 
 ---
 
