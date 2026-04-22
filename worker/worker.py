@@ -3,16 +3,19 @@ import time
 import os
 import signal
 
-r = redis.Redis(host="localhost", port=6379)
+REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379")
+r = redis.Redis.from_url(REDIS_URL, decode_responses=True)
 
 def process_job(job_id):
     print(f"Processing job {job_id}")
-    time.sleep(2)  # simulate work
-    r.hset(f"job:{job_id}", "status", "completed")
+    time.sleep(2)
+    r.hset(f"job:{job_id}", "status", "done")
     print(f"Done: {job_id}")
 
+print("Worker started...")
+
 while True:
-    job = r.brpop("job", timeout=5)
+    job = r.brpop("jobs", timeout=5)
     if job:
         _, job_id = job
-        process_job(job_id.decode())
+        process_job(job_id)
