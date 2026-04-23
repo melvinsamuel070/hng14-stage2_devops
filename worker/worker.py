@@ -39,7 +39,7 @@ def process_job(job_id):
         time.sleep(2)  # simulate work
 
         # ✅ FIX: must match integration test expectation
-        r.hset(f"job:{job_id}", "status", "completed")
+        r.hset(f"job:{job_id}", "status", "done")
 
         print(f"Completed job {job_id}")
 
