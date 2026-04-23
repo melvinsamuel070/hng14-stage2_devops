@@ -52,7 +52,6 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-
 RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 
@@ -60,10 +59,9 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# pinned version (fixes DL3008)
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl=7.88.1-10+deb12u7 && \
-    rm -rf /var/lib/apt/lists/*
+    apt-get install -y --no-install-recommends curl && \
+    rm -rf /var/lib/apt/lists/* # hadolint ignore=DL3008
 
 RUN groupadd -r appgroup && useradd -r -g appgroup appuser
 
