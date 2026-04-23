@@ -259,7 +259,7 @@ permissions:
   security-events: write
 
 env:
-  REGISTRY: 127.0.0.1:5000
+  REGISTRY: localhost:5000
   TAG: ${{ github.sha }}
 
 jobs:
@@ -373,12 +373,14 @@ jobs:
       - name: Wait for registry
         run: |
           for i in {1..30}; do
-            if curl -s http://127.0.0.1:5000/v2/; then
+            if curl -s http://localhost:5000/v2/; then
               echo "Registry ready"
               exit 0
             fi
+            echo "Waiting registry... $i"
             sleep 2
           done
+          echo "Registry failed"
           exit 1
 
       # ✅ REQUIRED for caching score
@@ -396,17 +398,17 @@ jobs:
             ${{ runner.os }}-buildx-
 
       # ✅ API
-      - name: Build & push API
+      - name: Build & Push API
         uses: docker/build-push-action@v5
         with:
           context: ./api
           push: true
           tags: |
-            ${{ env.REGISTRY }}/api:${{ env.TAG }}
-            ${{ env.REGISTRY }}/api:latest
-          cache-from: type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
-
+            localhost:5000/api:${{ env.TAG }}
+            localhost:5000/api:latest
+            cache-from: type=local,src=/tmp/.buildx-cache
+            cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+            
       # ✅ Worker
       - name: Build & push Worker
         uses: docker/build-push-action@v5
