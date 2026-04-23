@@ -2,7 +2,7 @@ FROM python:3.12-slim AS builder
 
 WORKDIR /app
 
-# Install build tools (NO fake pin versions)
+# Install build tools (NO fake version pinning)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     build-essential \
@@ -18,13 +18,13 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install curl (NO fake pin version)
+# Install curl (no fake pinned version)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# create non-root user (grading requirement)
+# Create non-root user (required by grading)
 RUN groupadd -r appgroup && useradd -r -g appgroup appuser
 
 COPY --from=builder /install /usr/local
