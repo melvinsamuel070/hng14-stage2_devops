@@ -4,6 +4,9 @@ import os
 import signal
 import sys
 
+# -------------------------
+# REDIS CONNECTION
+# -------------------------
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379")
 r = redis.Redis.from_url(REDIS_URL, decode_responses=True)
 
@@ -30,12 +33,13 @@ def process_job(job_id):
     try:
         print(f"Processing job {job_id}")
 
-        # mark processing (helps integration stability)
+        # mark processing
         r.hset(f"job:{job_id}", "status", "processing")
 
         time.sleep(2)  # simulate work
 
-        r.hset(f"job:{job_id}", "status", "done")
+        # ✅ FIX: must match integration test expectation
+        r.hset(f"job:{job_id}", "status", "completed")
 
         print(f"Completed job {job_id}")
 
@@ -55,8 +59,6 @@ while running:
 
         if job:
             _, job_id = job
-            job_id = job_id.decode("utf-8")  # 🔥 FIX CRITICAL ISSUE
-
             process_job(job_id)
 
     except redis.exceptions.ConnectionError:
