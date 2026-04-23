@@ -47,25 +47,34 @@ FROM python:3.12-slim AS builder
 
 WORKDIR /app
 
+# Install build tools (NO PINNING versions)
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends build-essential=12.9 && \
+    apt-get install -y --no-install-recommends build-essential && \
     rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
+
+# Install Python deps into a clean install prefix
 RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 
+# ---------------- FINAL STAGE ----------------
 FROM python:3.12-slim
 
 WORKDIR /app
 
+# Install curl (NO PINNING versions)
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl=7.88.1-10+deb12u1 && \
+    apt-get install -y --no-install-recommends curl && \
     rm -rf /var/lib/apt/lists/*
 
+# Create non-root user
 RUN groupadd -r appgroup && useradd -r -g appgroup appuser
 
+# Copy installed dependencies
 COPY --from=builder /install /usr/local
+
+# Copy application code
 COPY . .
 
 ENV PATH="/usr/local/bin:$PATH"
