@@ -233,6 +233,7 @@ permissions:
   security-events: write
 
 env:
+  REGISTRY: 127.0.0.1:5000
   TAG: ${{ github.sha }}
 
 jobs:
@@ -241,33 +242,47 @@ jobs:
 # LINT
 # =========================
   lint:
+    name: Lint Codebase
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - run: pip install flake8
-      - run: flake8 api --exclude venv,__pycache__
+      - name: Install flake8
+        run: pip install flake8
 
-      - uses: actions/setup-node@v4
+      - name: Run flake8
+        run: flake8 api --exclude venv,__pycache__
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: "18"
 
-      - run: |
+      - name: Install frontend deps
+        run: |
           cd frontend
           npm install --legacy-peer-deps
+
+      - name: Run eslint
+        run: |
+          cd frontend
           npx eslint . || true
 
-      - run: |
+      - name: Install hadolint
+        run: |
           wget -O hadolint https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Linux-x86_64
           chmod +x hadolint
           sudo mv hadolint /usr/local/bin/
 
-      - run: |
+      - name: Run hadolint
+        run: |
           hadolint api/Dockerfile
           hadolint worker/Dockerfile
           hadolint frontend/Dockerfile
@@ -277,6 +292,7 @@ jobs:
 # TEST
 # =========================
   test:
+    name: Run Tests
     runs-on: ubuntu-latest
     needs: lint
 
@@ -287,45 +303,121 @@ jobs:
           - 6379:6379
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - run: |
+      - name: Install dependencies
+        run: |
           cd api
           pip install -r requirements.txt
           pip install pytest pytest-cov
-          pytest -v --cov=. --cov-report=xml
 
-      - uses: actions/upload-artifact@v4
+      - name: Run pytest with coverage
+        run: |
+          cd api
+          python -m pytest -v --cov=. --cov-report=xml
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
         with:
           name: coverage
           path: api/coverage.xml
 
 
 # =========================
-# BUILD + SECURITY (MERGED ✅)
+# BUILD + PUSH (MANUAL REGISTRY)
 # =========================
   build:
+    name: Build & Push Images
     runs-on: ubuntu-latest
     needs: test
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      # Build images LOCALLY (no registry needed)
-      - name: Build API image
-        run: docker build -t api:${{ env.TAG }} ./api
+      - name: Start local registry
+        run: |
+          docker run -d --name registry -p 5000:5000 registry:2
+          for i in {1..30}; do
+            if docker exec registry wget -q --spider http://127.0.0.1:5000/v2/ 2>/dev/null || \
+               docker exec registry sh -c "cat /dev/null > /dev/tcp/127.0.0.1/5000" 2>/dev/null; then
+              echo "Registry is ready"
+              break
+            fi
+            echo "Waiting for registry... (attempt $i)"
+            sleep 2
+          done
+          docker ps | grep registry
 
-      - name: Build Worker image
-        run: docker build -t worker:${{ env.TAG }} ./worker
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker-container
 
-      - name: Build Frontend image
-        run: docker build -t frontend:${{ env.TAG }} ./frontend
+      - name: Cache Docker layers
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
 
-      # Install Trivy
+      - name: Build and push API
+        uses: docker/build-push-action@v5
+        with:
+          context: ./api
+          file: ./api/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/api:${{ env.TAG }}
+            ${{ env.REGISTRY }}/api:latest
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+
+      - name: Build and push Worker
+        uses: docker/build-push-action@v5
+        with:
+          context: ./worker
+          file: ./worker/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/worker:${{ env.TAG }}
+            ${{ env.REGISTRY }}/worker:latest
+
+      - name: Build and push Frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/frontend:${{ env.TAG }}
+            ${{ env.REGISTRY }}/frontend:latest
+
+      - name: Move cache
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+
+
+# =========================
+# SECURITY
+# =========================
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Install Trivy
         run: |
           sudo apt-get update
@@ -335,11 +427,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y trivy
 
-      # ✅ Scan LOCAL image (THIS FIXES YOUR ERROR)
       - name: Scan API image
         run: |
           trivy image --severity CRITICAL --exit-code 1 \
-          --format sarif -o api.sarif api:${{ env.TAG }}
+          --format sarif -o api.sarif ${{ env.REGISTRY }}/api:${{ env.TAG }}
 
       - name: Upload SARIF
         uses: github/codeql-action/upload-sarif@v4
@@ -351,24 +442,33 @@ jobs:
 # INTEGRATION
 # =========================
   integration:
+    name: Integration Test
     runs-on: ubuntu-latest
-    needs: build
+    needs: security
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - run: docker compose up -d --build
+      - name: Start stack
+        run: docker compose up -d --build
 
-      - run: |
+      - name: Wait for API health
+        run: |
           for i in {1..12}; do
-            curl -f http://localhost:8000/health && exit 0
+            if curl -f http://localhost:8000/health; then
+              echo "API ready"
+              exit 0
+            fi
             sleep 5
           done
           exit 1
 
-      - run: timeout 60 bash integration_test.sh
+      - name: Run integration test
+        run: timeout 60 bash integration_test.sh
 
-      - if: always()
+      - name: Teardown
+        if: always()
         run: docker compose down
 
 
@@ -376,18 +476,22 @@ jobs:
 # DEPLOY
 # =========================
   deploy:
+    name: Deploy (Rolling Update)
     runs-on: ubuntu-latest
     needs: integration
     if: github.ref == 'refs/heads/main'
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - run: |
+      - name: Deploy stack
+        run: |
           docker compose build
           docker compose up -d --no-deps api
 
-      - run: |
+      - name: Verify health
+        run: |
           for i in {1..12}; do
             curl -f http://localhost:8000/health && exit 0
             sleep 5
