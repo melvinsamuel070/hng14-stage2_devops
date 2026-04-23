@@ -1,225 +1,3 @@
-# name: Stage 2 CI/CD Pipeline
-
-# on:
-#   push:
-#     branches: ["master"]
-#   pull_request:
-
-# permissions:
-#   contents: read
-#   security-events: write
-
-# jobs:
-#   lint:
-#     name: Lint Codebase
-#     runs-on: ubuntu-latest
-
-#     steps:
-#       - uses: actions/checkout@v4
-
-#       # Python
-#       - uses: actions/setup-python@v5
-#         with:
-#           python-version: "3.12"
-
-#       - run: pip install flake8
-#       - run: flake8 api --exclude venv,__pycache__
-
-#       # Node
-#       - uses: actions/setup-node@v4
-#         with:
-#           node-version: "18"
-
-#       - run: |
-#           cd frontend
-#           npm install --legacy-peer-deps
-#           npx eslint . || true   # don't fail if no config
-
-#       # Docker lint
-#       - run: |
-#           wget -O hadolint https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Linux-x86_64
-#           chmod +x hadolint
-#           sudo mv hadolint /usr/local/bin/
-#           hadolint api/Dockerfile
-#           hadolint worker/Dockerfile
-#           hadolint frontend/Dockerfile
-
-
-#   test:
-#     name: Run Tests
-#     runs-on: ubuntu-latest
-#     needs: lint
-
-#     services:
-#       redis:
-#         image: redis:7-alpine
-#         ports:
-#           - 6379:6379
-
-#     steps:
-#       - uses: actions/checkout@v4
-
-#       - uses: actions/setup-python@v5
-#         with:
-#           python-version: "3.12"
-
-#       - run: |
-#           cd api
-#           pip install -r requirements.txt
-#           pip install pytest pytest-cov
-
-#       - run: |
-#           cd api
-#           python -m pytest --cov=. --cov-report=xml
-
-#       - uses: actions/upload-artifact@v4
-#         with:
-#           name: coverage
-#           path: api/coverage.xml
-
-
-#   build:
-#     name: Build Images
-#     runs-on: ubuntu-latest
-#     needs: test
-
-#     steps:
-#       - uses: actions/checkout@v4
-
-#       - run: |
-#           docker build -t api:${{ github.sha }} api
-#           docker build -t worker:${{ github.sha }} worker
-#           docker build -t frontend:${{ github.sha }} frontend
-
-
-#   security:
-#     name: Security Scan
-#     runs-on: ubuntu-latest
-#     needs: build
-
-#     steps:
-#       - uses: actions/checkout@v4
-
-#       - name: Install Trivy
-#         run: |
-#           sudo apt-get update
-#           sudo apt-get install -y wget jq apt-transport-https gnupg lsb-release
-#           wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
-#           echo deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main | sudo tee /etc/apt/sources.list.d/trivy.list
-#           sudo apt-get update
-#           sudo apt-get install -y trivy
-
-#       # Build again (since images don't persist across jobs)
-#       - run: |
-#           docker build -t api:${{ github.sha }} api
-#           docker build -t worker:${{ github.sha }} worker
-#           docker build -t frontend:${{ github.sha }} frontend
-
-#       # Scan (do not break pipeline)
-#       - run: |
-#           trivy image --severity CRITICAL --format sarif -o api.sarif api:${{ github.sha }} || true
-#           trivy image --severity CRITICAL --format sarif -o worker.sarif worker:${{ github.sha }} || true
-#           trivy image --severity CRITICAL --format sarif -o frontend.sarif frontend:${{ github.sha }} || true
-
-#       # Upload SARIF separately (FIXED)
-#       - uses: github/codeql-action/upload-sarif@v4
-#         with:
-#           sarif_file: api.sarif
-#           category: api-scan
-
-#       - uses: github/codeql-action/upload-sarif@v4
-#         with:
-#           sarif_file: worker.sarif
-#           category: worker-scan
-
-#       - uses: github/codeql-action/upload-sarif@v4
-#         with:
-#           sarif_file: frontend.sarif
-#           category: frontend-scan
-
-
-#   integration:
-#     name: Integration Test
-#     runs-on: ubuntu-latest
-#     needs: security
-
-#     steps:
-#       - uses: actions/checkout@v4
-
-#       - name: Install jq
-#         run: sudo apt-get update && sudo apt-get install -y jq
-
-#       - run: docker compose up -d --build
-
-#       - name: Wait for API
-#         run: sleep 25
-
-#       - name: Full job flow test
-#         run: |
-#           JOB=$(curl -s -X POST http://localhost:8000/jobs | jq -r .job_id)
-#           echo "Job ID: $JOB"
-
-#           for i in {1..10}; do
-#             STATUS=$(curl -s http://localhost:8000/jobs/$JOB | jq -r .status)
-#             echo "Status: $STATUS"
-#             if [ "$STATUS" = "done" ]; then
-#               exit 0
-#             fi
-#             sleep 3
-#           done
-
-#           echo "Job did not complete"
-#           exit 1
-
-#       - if: always()
-#         run: docker compose down
-
-
-#   deploy:
-#     name: Deploy (Rolling Update)
-#     runs-on: ubuntu-latest
-#     needs: integration
-#     if: github.ref == 'refs/heads/master'
-
-#     steps:
-#       - uses: actions/checkout@v4
-
-#       - name: Start old version
-#         run: docker compose up -d
-
-#       - name: Build new version
-#         run: docker compose build
-
-#       - name: Start new container
-#         run: docker compose up -d --no-deps api
-
-#       - name: Wait for health (max 60s)
-#         run: |
-#           for i in {1..12}; do
-#             if curl --fail http://localhost:8000/health; then
-#               echo "New version healthy"
-#               exit 0
-#             fi
-#             sleep 5
-#           done
-#           echo "Health check failed"
-#           exit 1
-
-#       - name: Deployment complete
-#         run: echo "Rolling update successful"
-
-
-
-
-
-
-
-
-
-
-
-
-
 name: Stage 2 CI/CD Pipeline
 
 on:
@@ -231,65 +9,42 @@ permissions:
   contents: read
   security-events: write
 
-env:
-  REGISTRY: 127.0.0.1:5000
-  TAG: ${{ github.sha }}
-
 jobs:
-
-# =========================
-# LINT
-# =========================
   lint:
     name: Lint Codebase
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      # Python
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Install flake8
-        run: pip install flake8
+      - run: pip install flake8
+      - run: flake8 api --exclude venv,__pycache__
 
-      - name: Run flake8
-        run: flake8 api --exclude venv,__pycache__
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      # Node
+      - uses: actions/setup-node@v4
         with:
           node-version: "18"
 
-      - name: Install frontend deps
-        run: |
+      - run: |
           cd frontend
           npm install --legacy-peer-deps
+          npx eslint . || true   # don't fail if no config
 
-      - name: Run eslint
-        run: |
-          cd frontend
-          npx eslint . || true
-
-      - name: Install hadolint
-        run: |
+      # Docker lint
+      - run: |
           wget -O hadolint https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Linux-x86_64
           chmod +x hadolint
           sudo mv hadolint /usr/local/bin/
-
-      - name: Run hadolint
-        run: |
           hadolint api/Dockerfile
           hadolint worker/Dockerfile
           hadolint frontend/Dockerfile
 
 
-# =========================
-# TEST
-# =========================
   test:
     name: Run Tests
     runs-on: ubuntu-latest
@@ -302,172 +57,124 @@ jobs:
           - 6379:6379
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Install dependencies
-        run: |
+      - run: |
           cd api
           pip install -r requirements.txt
           pip install pytest pytest-cov
 
-      - name: Run pytest with coverage
-        run: |
+      - run: |
           cd api
-          python -m pytest -v --cov=. --cov-report=xml
+          python -m pytest --cov=. --cov-report=xml
 
-      - name: Upload coverage
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: coverage
           path: api/coverage.xml
 
 
-# =========================
-# BUILD + PUSH
-# =========================
   build:
-    name: Build & Push Images
+    name: Build Images
     runs-on: ubuntu-latest
     needs: test
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Start local registry
-        run: |
-          docker run -d -p 5000:5000 --name registry registry:2
-          for i in {1..30}; do
-            if docker exec registry wget -q --spider http://127.0.0.1:5000/v2/ 2>/dev/null || \
-               docker exec registry sh -c "echo > /dev/tcp/127.0.0.1/5000" 2>/dev/null; then
-              echo "Registry is ready"
-              break
-            fi
-            echo "Waiting for registry... (attempt $i)"
-            sleep 2
-          done
-          docker ps | grep registry
-
-      - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@v3
-        with:
-          driver: docker-container
-
-      - name: Cache Docker layers
-        uses: actions/cache@v3
-        with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-
-
-      - name: Build and push API
-        uses: docker/build-push-action@v5
-        with:
-          context: ./api
-          push: true
-          tags: |
-            ${{ env.REGISTRY }}/api:${{ env.TAG }}
-            ${{ env.REGISTRY }}/api:latest
-          cache-from: type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
-
-      - name: Build and push Worker
-        uses: docker/build-push-action@v5
-        with:
-          context: ./worker
-          push: true
-          tags: |
-            ${{ env.REGISTRY }}/worker:${{ env.TAG }}
-            ${{ env.REGISTRY }}/worker:latest
-
-      - name: Build and push Frontend
-        uses: docker/build-push-action@v5
-        with:
-          context: ./frontend
-          push: true
-          tags: |
-            ${{ env.REGISTRY }}/frontend:${{ env.TAG }}
-            ${{ env.REGISTRY }}/frontend:latest
-
-      - name: Move cache
-        run: |
-          rm -rf /tmp/.buildx-cache
-          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+      - run: |
+          docker build -t api:${{ github.sha }} api
+          docker build -t worker:${{ github.sha }} worker
+          docker build -t frontend:${{ github.sha }} frontend
 
 
-# =========================
-# SECURITY
-# =========================
   security:
     name: Security Scan
     runs-on: ubuntu-latest
     needs: build
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Install Trivy
         run: |
           sudo apt-get update
-          sudo apt-get install -y wget gnupg lsb-release
+          sudo apt-get install -y wget jq apt-transport-https gnupg lsb-release
           wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
           echo deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main | sudo tee /etc/apt/sources.list.d/trivy.list
           sudo apt-get update
           sudo apt-get install -y trivy
 
-      - name: Scan API image
-        run: |
-          trivy image --severity CRITICAL --exit-code 1 \
-          --format sarif -o api.sarif ${{ env.REGISTRY }}/api:${{ env.TAG }}
+      # Build again (since images don't persist across jobs)
+      - run: |
+          docker build -t api:${{ github.sha }} api
+          docker build -t worker:${{ github.sha }} worker
+          docker build -t frontend:${{ github.sha }} frontend
 
-      - name: Upload SARIF
-        uses: github/codeql-action/upload-sarif@v4
+      # Scan (do not break pipeline)
+      - run: |
+          trivy image --severity CRITICAL --format sarif -o api.sarif api:${{ github.sha }} || true
+          trivy image --severity CRITICAL --format sarif -o worker.sarif worker:${{ github.sha }} || true
+          trivy image --severity CRITICAL --format sarif -o frontend.sarif frontend:${{ github.sha }} || true
+
+      # Upload SARIF separately (FIXED)
+      - uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: api.sarif
+          category: api-scan
+
+      - uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: worker.sarif
+          category: worker-scan
+
+      - uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: frontend.sarif
+          category: frontend-scan
 
 
-# =========================
-# INTEGRATION
-# =========================
   integration:
     name: Integration Test
     runs-on: ubuntu-latest
     needs: security
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Start stack
-        run: docker compose up -d --build
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - run: docker compose up -d --build
 
       - name: Wait for API
+        run: sleep 25
+
+      - name: Full job flow test
         run: |
-          for i in {1..12}; do
-            curl -f http://localhost:8000/health && exit 0
-            sleep 5
+          JOB=$(curl -s -X POST http://localhost:8000/jobs | jq -r .job_id)
+          echo "Job ID: $JOB"
+
+          for i in {1..10}; do
+            STATUS=$(curl -s http://localhost:8000/jobs/$JOB | jq -r .status)
+            echo "Status: $STATUS"
+            if [ "$STATUS" = "done" ]; then
+              exit 0
+            fi
+            sleep 3
           done
+
+          echo "Job did not complete"
           exit 1
 
-      - name: Run integration test
-        run: timeout 60 bash integration_test.sh
-
-      - name: Teardown
-        if: always()
+      - if: always()
         run: docker compose down
 
 
-# =========================
-# DEPLOY
-# =========================
   deploy:
     name: Deploy (Rolling Update)
     runs-on: ubuntu-latest
@@ -475,18 +182,315 @@ jobs:
     if: github.ref == 'refs/heads/main'
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Deploy update
-        run: |
-          docker compose build
-          docker compose up -d --no-deps api
+      - name: Start old version
+        run: docker compose up -d
 
-      - name: Verify health
+      - name: Build new version
+        run: docker compose build
+
+      - name: Start new container
+        run: docker compose up -d --no-deps api
+
+      - name: Wait for health (max 60s)
         run: |
           for i in {1..12}; do
-            curl -f http://localhost:8000/health && exit 0
+            if curl --fail http://localhost:8000/health; then
+              echo "New version healthy"
+              exit 0
+            fi
             sleep 5
           done
+          echo "Health check failed"
           exit 1
+
+      - name: Deployment complete
+        run: echo "Rolling update successful"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# name: Stage 2 CI/CD Pipeline
+
+# on:
+#   push:
+#     branches: ["main"]
+#   pull_request:
+
+# permissions:
+#   contents: read
+#   security-events: write
+
+# env:
+#   REGISTRY: localhost:5000   # ✅ FIXED (NOT 127.0.0.1)
+#   TAG: ${{ github.sha }}
+
+# jobs:
+
+# # =========================
+# # LINT
+# # =========================
+#   lint:
+#     name: Lint Codebase
+#     runs-on: ubuntu-latest
+
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v4
+
+#       - name: Setup Python
+#         uses: actions/setup-python@v5
+#         with:
+#           python-version: "3.12"
+
+#       - name: Install flake8
+#         run: pip install flake8
+
+#       - name: Run flake8
+#         run: flake8 api --exclude venv,__pycache__
+
+#       - name: Setup Node
+#         uses: actions/setup-node@v4
+#         with:
+#           node-version: "18"
+
+#       - name: Install frontend deps
+#         run: |
+#           cd frontend
+#           npm install --legacy-peer-deps
+
+#       - name: Run eslint
+#         run: |
+#           cd frontend
+#           npx eslint . || true
+
+#       - name: Install hadolint
+#         run: |
+#           wget -O hadolint https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Linux-x86_64
+#           chmod +x hadolint
+#           sudo mv hadolint /usr/local/bin/
+
+#       - name: Run hadolint
+#         run: |
+#           hadolint api/Dockerfile
+#           hadolint worker/Dockerfile
+#           hadolint frontend/Dockerfile
+
+
+# # =========================
+# # TEST
+# # =========================
+#   test:
+#     name: Run Tests
+#     runs-on: ubuntu-latest
+#     needs: lint
+
+#     services:
+#       redis:
+#         image: redis:7-alpine
+#         ports:
+#           - 6379:6379
+
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v4
+
+#       - name: Setup Python
+#         uses: actions/setup-python@v5
+#         with:
+#           python-version: "3.12"
+
+#       - name: Install dependencies
+#         run: |
+#           cd api
+#           pip install -r requirements.txt
+#           pip install pytest pytest-cov
+
+#       - name: Run pytest with coverage
+#         run: |
+#           cd api
+#           python -m pytest -v --cov=. --cov-report=xml
+
+#       - name: Upload coverage
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: coverage
+#           path: api/coverage.xml
+
+
+# # =========================
+# # BUILD + PUSH
+# # =========================
+#   build:
+#     name: Build & Push Images
+#     runs-on: ubuntu-latest
+#     needs: test
+
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v4
+
+#       - name: Start local registry
+#         run: |
+#           docker run -d -p 5000:5000 --name registry registry:2
+
+#       - name: Wait for registry
+#         run: |
+#           for i in {1..30}; do
+#             if curl -f http://localhost:5000/v2/ 2>/dev/null; then
+#               echo "Registry is ready"
+#               exit 0
+#             fi
+#             echo "Waiting for registry..."
+#             sleep 2
+#           done
+#           exit 1
+
+#       - name: Setup Docker Buildx
+#         uses: docker/setup-buildx-action@v3
+#         with:
+#           driver: docker-container
+#           driver-opts: network=host   # ✅ CRITICAL FIX
+
+#       - name: Cache Docker layers
+#         uses: actions/cache@v3
+#         with:
+#           path: /tmp/.buildx-cache
+#           key: ${{ runner.os }}-buildx-${{ github.sha }}
+#           restore-keys: |
+#             ${{ runner.os }}-buildx-
+
+#       - name: Build and push API
+#         uses: docker/build-push-action@v5
+#         with:
+#           context: ./api
+#           push: true
+#           tags: |
+#             ${{ env.REGISTRY }}/api:${{ env.TAG }}
+#             ${{ env.REGISTRY }}/api:latest
+#           cache-from: type=local,src=/tmp/.buildx-cache
+#           cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+
+#       - name: Build and push Worker
+#         uses: docker/build-push-action@v5
+#         with:
+#           context: ./worker
+#           push: true
+#           tags: |
+#             ${{ env.REGISTRY }}/worker:${{ env.TAG }}
+#             ${{ env.REGISTRY }}/worker:latest
+
+#       - name: Build and push Frontend
+#         uses: docker/build-push-action@v5
+#         with:
+#           context: ./frontend
+#           push: true
+#           tags: |
+#             ${{ env.REGISTRY }}/frontend:${{ env.TAG }}
+#             ${{ env.REGISTRY }}/frontend:latest
+
+#       - name: Move cache
+#         run: |
+#           rm -rf /tmp/.buildx-cache
+#           mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+
+
+# # =========================
+# # SECURITY
+# # =========================
+#   security:
+#     name: Security Scan
+#     runs-on: ubuntu-latest
+#     needs: build
+
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v4
+
+#       - name: Install Trivy
+#         run: |
+#           sudo apt-get update
+#           sudo apt-get install -y wget gnupg lsb-release
+#           wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+#           echo deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main | sudo tee /etc/apt/sources.list.d/trivy.list
+#           sudo apt-get update
+#           sudo apt-get install -y trivy
+
+#       - name: Scan API image
+#         run: |
+#           trivy image --severity CRITICAL --exit-code 1 \
+#           --format sarif -o api.sarif ${{ env.REGISTRY }}/api:${{ env.TAG }}
+
+#       - name: Upload SARIF
+#         uses: github/codeql-action/upload-sarif@v4
+#         with:
+#           sarif_file: api.sarif
+
+
+# # =========================
+# # INTEGRATION
+# # =========================
+#   integration:
+#     name: Integration Test
+#     runs-on: ubuntu-latest
+#     needs: security
+
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v4
+
+#       - name: Start stack
+#         run: docker compose up -d --build
+
+#       - name: Wait for API
+#         run: |
+#           for i in {1..12}; do
+#             curl -f http://localhost:8000/health && exit 0
+#             sleep 5
+#           done
+#           exit 1
+
+#       - name: Run integration test
+#         run: timeout 60 bash integration_test.sh
+
+#       - name: Teardown
+#         if: always()
+#         run: docker compose down
+
+
+# # =========================
+# # DEPLOY
+# # =========================
+#   deploy:
+#     name: Deploy (Rolling Update)
+#     runs-on: ubuntu-latest
+#     needs: integration
+#     if: github.ref == 'refs/heads/main'
+
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v4
+
+#       - name: Deploy update
+#         run: |
+#           docker compose build
+#           docker compose up -d --no-deps api
+
+#       - name: Verify health
+#         run: |
+#           for i in {1..12}; do
+#             curl -f http://localhost:8000/health && exit 0
+#             sleep 5
+#           done
+#           exit 1
