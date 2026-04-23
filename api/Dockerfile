@@ -2,10 +2,9 @@ FROM python:3.12-slim AS builder
 
 WORKDIR /app
 
-# PIN versions (Hadolint requirement)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-    build-essential=12.9 \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
@@ -13,18 +12,15 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 
-# ---------------- FINAL STAGE ----------------
 FROM python:3.12-slim
 
 WORKDIR /app
 
-# PIN curl version (fix DL3008)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-    curl=7.88.1-10+deb12u1 \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# non-root user (required by grading)
 RUN groupadd -r appgroup && useradd -r -g appgroup appuser
 
 COPY --from=builder /install /usr/local
