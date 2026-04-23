@@ -2,10 +2,10 @@ FROM python:3.12-slim AS builder
 
 WORKDIR /app
 
-# PIN versions (Hadolint requirement)
+# PIN versions (Hadolint requirement) - Updated for Debian Trixie
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-    build-essential=12.9 \
+    build-essential=12.10 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
@@ -18,10 +18,10 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# PIN curl version (fix DL3008) - using actual Debian Bookworm versions
+# PIN curl version (fix DL3008) - Updated for Debian Trixie
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-    curl=7.88.1-10+deb12u8 \
+    curl=8.6.0-3 \
     && rm -rf /var/lib/apt/lists/*
 
 # non-root user (required by grading)
