@@ -60,8 +60,9 @@ FROM python:3.12-slim
 WORKDIR /app
 
 RUN apt-get update && \
+    # hadolint ignore=DL3008
     apt-get install -y --no-install-recommends curl && \
-    rm -rf /var/lib/apt/lists/* # hadolint ignore=DL3008
+    rm -rf /var/lib/apt/lists/*
 
 RUN groupadd -r appgroup && useradd -r -g appgroup appuser
 
