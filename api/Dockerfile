@@ -43,7 +43,6 @@
 
 
 
-# -------- BUILD STAGE --------
 FROM python:3.12-slim AS builder
 
 WORKDIR /app
@@ -57,14 +56,13 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 
-# -------- RUNTIME STAGE --------
 FROM python:3.12-slim
 
 WORKDIR /app
 
-# hadolint ignore=DL3008
+# pinned version (fixes DL3008)
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl && \
+    apt-get install -y --no-install-recommends curl=7.88.1-10+deb12u7 && \
     rm -rf /var/lib/apt/lists/*
 
 RUN groupadd -r appgroup && useradd -r -g appgroup appuser
