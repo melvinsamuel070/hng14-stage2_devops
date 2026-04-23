@@ -30,6 +30,9 @@ def process_job(job_id):
     try:
         print(f"Processing job {job_id}")
 
+        # mark processing (helps integration stability)
+        r.hset(f"job:{job_id}", "status", "processing")
+
         time.sleep(2)  # simulate work
 
         r.hset(f"job:{job_id}", "status", "done")
@@ -52,6 +55,8 @@ while running:
 
         if job:
             _, job_id = job
+            job_id = job_id.decode("utf-8")  # 🔥 FIX CRITICAL ISSUE
+
             process_job(job_id)
 
     except redis.exceptions.ConnectionError:
