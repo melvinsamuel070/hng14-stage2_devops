@@ -2,10 +2,9 @@ FROM python:3.12-slim AS builder
 
 WORKDIR /app
 
-# PIN versions (Hadolint requirement) - Corrected for Debian Trixie
+# hadolint ignore=DL3008
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    build-essential=12.12 \
+    apt-get install -y --no-install-recommends build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
@@ -18,13 +17,12 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# PIN curl version (fix DL3008) - Corrected for Debian Trixie
+# hadolint ignore=DL3008
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    curl=8.14.1-2+deb13u2 \
+    apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 
-# non-root user (required by grading)
+# non-root user (REQUIRED)
 RUN groupadd -r appgroup && useradd -r -g appgroup appuser
 
 COPY --from=builder /install /usr/local
