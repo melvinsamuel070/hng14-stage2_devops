@@ -9,30 +9,31 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
-    cpus: 0.25
-    mem_limit: 256m
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
 
   api:
     build:
       context: ./api
+    image: ${REGISTRY:-127.0.0.1:5000}/api:${TAG:-latest}
     restart: unless-stopped
-
     environment:
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
-
+      REDIS_URL: ${REDIS_URL}
     depends_on:
       redis:
         condition: service_healthy
-
     ports:
       - "8000:8000"
-
     networks:
       - app-network
-
-    cpus: 0.5
-    mem_limit: 512m
-
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
@@ -43,43 +44,42 @@ services:
   worker:
     build:
       context: ./worker
+    image: ${REGISTRY:-127.0.0.1:5000}/worker:${TAG:-latest}
     restart: unless-stopped
-
     environment:
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
-
+      REDIS_URL: ${REDIS_URL}
     depends_on:
       redis:
         condition: service_healthy
       api:
         condition: service_healthy
-
     networks:
       - app-network
-
-    cpus: 0.5
-    mem_limit: 512m
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
 
   frontend:
     build:
       context: ./frontend
+    image: ${REGISTRY:-127.0.0.1:5000}/frontend:${TAG:-latest}
     restart: unless-stopped
-
     environment:
-      API_URL: ${API_URL:-http://api:8000}
-
+      API_URL: ${API_URL}
     depends_on:
       api:
         condition: service_healthy
-
     ports:
       - "3000:3000"
-
     networks:
       - app-network
-
-    cpus: 0.5
-    mem_limit: 512m
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
 
 networks:
   app-network:
