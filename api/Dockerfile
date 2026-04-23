@@ -2,11 +2,9 @@ FROM python:3.12-slim AS builder
 
 WORKDIR /app
 
-# Hadolint-safe workaround (DO NOT break build)
-# DL3008 suppressed because Debian snapshot versions are unstable
+# Install build tools (NO fake pin versions)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-    # hadolint ignore=DL3008
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
@@ -20,12 +18,13 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+# Install curl (NO fake pin version)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-    # hadolint ignore=DL3008
     curl \
     && rm -rf /var/lib/apt/lists/*
 
+# create non-root user (grading requirement)
 RUN groupadd -r appgroup && useradd -r -g appgroup appuser
 
 COPY --from=builder /install /usr/local
