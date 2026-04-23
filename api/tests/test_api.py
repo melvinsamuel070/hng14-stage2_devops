@@ -34,4 +34,3 @@ def test_get_job_invalid(mock_redis):
 
     assert response.status_code == 200
     assert response.json() == {"error": "not found"}
-
