@@ -48,7 +48,7 @@ FROM python:3.12-slim AS builder
 WORKDIR /app
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends build-essential && \
+    apt-get install -y --no-install-recommends build-essential=12.9 && \
     rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
@@ -60,8 +60,7 @@ FROM python:3.12-slim
 WORKDIR /app
 
 RUN apt-get update && \
-    # hadolint ignore=DL3008
-    apt-get install -y --no-install-recommends curl && \
+    apt-get install -y --no-install-recommends curl=7.88.1-10+deb12u1 && \
     rm -rf /var/lib/apt/lists/*
 
 RUN groupadd -r appgroup && useradd -r -g appgroup appuser
