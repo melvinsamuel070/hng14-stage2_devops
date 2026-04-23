@@ -224,7 +224,6 @@
 
 
 
-
 name: Stage 2 CI/CD Pipeline
 
 on:
@@ -334,7 +333,7 @@ jobs:
 
 
 # =========================
-# BUILD + PUSH (FIXED)
+# BUILD + PUSH (FIXED CACHE)
 # =========================
   build:
     name: Build & Push Images
@@ -353,29 +352,53 @@ jobs:
 
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker-container
 
-      - name: Build API (cached + tagged)
-        run: |
-          docker build \
-            --cache-from=type=local,src=/tmp/.buildx-cache \
-            --cache-to=type=local,dest=/tmp/.buildx-cache-new \
-            -t $REGISTRY/api:$TAG \
-            -t $REGISTRY/api:latest \
-            api
+      - name: Cache Docker layers
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+
+      - name: Build API (with cache)
+        uses: docker/build-push-action@v5
+        with:
+          context: ./api
+          file: ./api/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/api:${{ env.TAG }}
+            ${{ env.REGISTRY }}/api:latest
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
 
       - name: Build Worker
-        run: |
-          docker build \
-            -t $REGISTRY/worker:$TAG \
-            -t $REGISTRY/worker:latest \
-            worker
+        uses: docker/build-push-action@v5
+        with:
+          context: ./worker
+          file: ./worker/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/worker:${{ env.TAG }}
+            ${{ env.REGISTRY }}/worker:latest
 
       - name: Build Frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/frontend:${{ env.TAG }}
+            ${{ env.REGISTRY }}/frontend:latest
+
+      - name: Move cache
         run: |
-          docker build \
-            -t $REGISTRY/frontend:$TAG \
-            -t $REGISTRY/frontend:latest \
-            frontend
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
 
 
 # =========================
@@ -402,7 +425,7 @@ jobs:
       - name: Scan API image
         run: |
           trivy image --severity CRITICAL --exit-code 1 \
-          --format sarif -o api.sarif $REGISTRY/api:$TAG
+          --format sarif -o api.sarif ${{ env.REGISTRY }}/api:${{ env.TAG }}
 
       - name: Upload SARIF
         uses: github/codeql-action/upload-sarif@v4
